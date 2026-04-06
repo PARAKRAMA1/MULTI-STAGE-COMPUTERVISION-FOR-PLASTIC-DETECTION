@@ -1,0 +1,19 @@
+This study presents a novel Resilient, Hierarchical Remote Sensing (RHRS)
+framework to overcome limitations of scale, environmental noise, and inaccu-
+rate quantification in current aquatic plastic debris monitoring. Traditional
+methods face a trade-off between low-resolution satellite imagery and noise-
+sensitive, limited-coverage drone vision systems. The RHRS framework employs
+a multi-stage, coarse-to-fine detection pipeline. Stage 1 uses a machine learn-
+ing model on Sentinel-2 multispectral data to identify macroplastic hotspots
+over large areas. Stage 2 triggers a low-power YOLOv8-based object detection
+model on UAVs for high-resolution local analysis. A key innovation is training
+the vision model with synthetic data augmentation to mitigate environmental
+variabilities such as sun glare, water turbidity, and surface ripples, achieving
+high robustness in real-world conditions. The framework also integrates an
+Occlusion- Aware DeepSORT tracking algorithm, enabling unique counting
+of debris beyond simple detection. Validation demonstrates a mean Average
+Precision (mAP) ¿90conditions and counting accuracy ¿95of plastic mass flux
+(kg/hr) for informed policy decisions and targeted environmental interventions.
+Keywords: Resilient Hierarchical Remote Sensing (RHRS); Multi-stage de-
+tection pipeline;YOLOv8 object detection;DeepSORT tracking algorithm;Plastic
+mass flux estimation (kg/hr
