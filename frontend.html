@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RHRS Marine Debris AI Detector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+       .log-font { font-family: 'JetBrains Mono', monospace; }
+       .radar-pulse { animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+       .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.8); }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-satellite-dish text-blue-400 text-2xl"></i>
+            <h1 class="text-xl font-semibold text-white">RHRS <span class="text-slate-400 font-light">Marine Debris Detector</span></h1>
+        </div>
+        <div class="flex items-center space-x-4 text-sm">
+            <span class="flex items-center text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-2"></span> System Online</span>
+            <span class="bg-slate-700 px-3 py-1 rounded-md text-slate-300">v2.0 (DeepSORT + Mass Flux)</span>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 overflow-hidden">
+        
+        <section class="col-span-1 flex flex-col space-y-6">
+            
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-white"><i class="fa-solid fa-map-location-dot text-blue-400 mr-2"></i>Target Coordinates</h2>
+                    <span class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded border border-blue-800">Manual Setup</span>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1 uppercase tracking-wider">Latitude</label>
+                        <input type="number" id="lat-input" value="17.2543" step="0.0001" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1 uppercase tracking-wider">Longitude</label>
+                        <input type="number" id="lon-input" value="78.4121" step="0.0001" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors">
+                    </div>
+                </div>
+
+                <button id="btn-run" class="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center">
+                    <i class="fa-solid fa-satellite mr-2"></i> Initialize Satellite Scan
+                </button>
+            </div>
+
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg flex-1">
+                <h2 class="text-lg font-semibold text-white mb-4"><i class="fa-solid fa-drone text-emerald-400 mr-2"></i>UAV Fleet Status</h2>
+                <div class="space-y-3" id="drone-status-list">
+                    <div class="flex items-center justify-between p-3 bg-slate-900 rounded-lg border border-slate-700">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-helicopter text-slate-500 mr-3"></i>
+                            <div>
+                                <p class="text-sm text-white">Drone Alpha-1</p>
+                                <p class="text-xs text-slate-400" id="drone-status-text">Standby at Base</p>
+                            </div>
+                        </div>
+                        <span class="text-xs font-semibold px-2 py-1 bg-slate-800 text-slate-300 rounded" id="drone-battery">100%</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="col-span-2 flex flex-col space-y-6 overflow-hidden">
+            
+            <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 shadow-lg flex-1 flex flex-col relative overflow-hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-white"><i class="fa-solid fa-camera-retro text-purple-400 mr-2"></i>Live Optical Feed</h2>
+                    
+                    <div class="flex space-x-4 text-xs">
+                        <span class="flex items-center"><span class="w-3 h-3 rounded bg-slate-600 border border-slate-500 mr-2"></span>Ocean Water</span>
+                        <span class="flex items-center"><span class="w-3 h-3 rounded bg-red-600 glow-red border border-red-400 mr-2"></span>Suspected Plastic</span>
+                    </div>
+                </div>
+
+                <div id="canvas-bg" class="flex-1 bg-slate-900 rounded-lg border border-slate-700 relative overflow-hidden flex items-center justify-center">
+                    <div id="loading-overlay" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i>
+                        <p class="text-blue-400 font-semibold tracking-widest text-sm" id="loading-text">CONNECTING TO SATELLITE...</p>
+                    </div>
+
+                    <div id="target-reticle" class="absolute hidden">
+                        <div class="w-16 h-16 border-2 border-red-500 rounded-full radar-pulse absolute -inset-4 opacity-50"></div>
+                        <div class="w-8 h-8 border-2 border-red-500 glow-red relative flex items-center justify-center">
+                            <i class="fa-solid fa-crosshairs text-red-500 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex justify-between text-xs text-slate-400 bg-slate-900 p-3 rounded-lg border border-slate-700">
+                    <span id="meta-date">Date: Awaiting Scan</span>
+                    <span id="meta-coords">Target: --, --</span>
+                    <span id="meta-status" class="text-yellow-500 font-semibold">Status: Idle</span>
+                </div>
+            </div>
+
+            <div class="bg- rounded-xl border border-slate-700 p-4 shadow-lg h-48 flex flex-col">
+                <div class="flex justify-between items-center mb-2 border-b border-slate-800 pb-2">
+                    <span class="text-xs text-slate-500 uppercase tracking-wider font-semibold">System Terminal</span>
+                    <i class="fa-solid fa-terminal text-slate-500"></i>
+                </div>
+                <div id="logs" class="flex-1 overflow-y-auto log-font text-xs text-green-400 space-y-1 pr-2">
+                    <div> Initialized. Ready for compute command.</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const btnRun = document.getElementById('btn-run');
+        const logsBox = document.getElementById('logs');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+        const targetReticle = document.getElementById('target-reticle');
+        
+        function addLog(message, isAlert = false) {
+            const div = document.createElement('div');
+            const time = new Date().toLocaleTimeString();
+            div.textContent = `[${time}] ${message}`;
+            if (isAlert) div.classList.add('text-red-400', 'font-bold');
+            logsBox.appendChild(div);
+            logsBox.scrollTop = logsBox.scrollHeight;
+        }
+
+        btnRun.addEventListener('click', async () => {
+            const lat = document.getElementById('lat-input').value;
+            const lon = document.getElementById('lon-input').value;
+
+            // UI Updates: Start Scan
+            btnRun.disabled = true;
+            btnRun.classList.add('opacity-50', 'cursor-not-allowed');
+            targetReticle.classList.add('hidden');
+            loadingOverlay.classList.remove('hidden');
+            loadingText.textContent = "ANALYZING SENTINEL-2 MULTISPECTRAL DATA...";
+            
+            addLog(`Initiating Sentinel-2 scan at coordinates: ${lat}, ${lon}`);
+            document.getElementById('meta-date').textContent = `Date: ${new Date().toLocaleDateString()}`;
+            document.getElementById('meta-coords').textContent = `Target: ${lat}, ${lon}`;
+            document.getElementById('meta-status').textContent = "Status: Scanning...";
+            document.getElementById('meta-status').className = "text-blue-400 font-semibold";
+
+            try {
+                // Call the FastAPI Backend
+                const response = await fetch('http://127.0.0.1:8000/api/scan_satellite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latitude: parseFloat(lat), longitude: parseFloat(lon) })
+                });
+
+                const data = await response.json();
+
+                // Wait 1.5 seconds for UI effect
+                setTimeout(() => {
+                    loadingText.textContent = "ANOMALY DETECTED. DISPATCHING UAV...";
+                    addLog("High Floating Debris Index (FDI) anomaly detected.", true);
+                    
+                    setTimeout(() => {
+                        // Satellite Scan Finished, Drone Dispatched
+                        loadingOverlay.classList.add('hidden');
+                        targetReticle.classList.remove('hidden'); // Show Red target
+                        
+                        document.getElementById('meta-status').textContent = "Status: Drone Dispatched";
+                        document.getElementById('meta-status').className = "text-emerald-400 font-semibold";
+                        
+                        document.getElementById('drone-status-text').textContent = "In Transit to Hotspot";
+                        document.getElementById('drone-status-text').className = "text-xs text-blue-400";
+                        document.getElementById('drone-battery').textContent = "98%";
+
+                        addLog(`Drone Alpha-1 dispatched to hotspot: ${data.hotspot.lat.toFixed(4)}, ${data.hotspot.lon.toFixed(4)}`);
+                        
+                        // Simulate the background task logging the YOLO/DeepSORT data
+                        simulateDroneTracking();
+                    }, 2000);
+                }, 1500);
+
+            } catch (error) {
+                addLog(`Connection Error: Ensure FastAPI server is running on port 8000.`, true);
+                loadingOverlay.classList.add('hidden');
+                btnRun.disabled = false;
+                btnRun.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+
+        // Simulates the console outputs your Python background task would generate
+        function simulateDroneTracking() {
+            let elapsed = 0;
+            let totalMass = 0;
+            
+            const interval = setInterval(() => {
+                elapsed += 5; // 5 seconds passed
+                
+                if (elapsed === 10) {
+                    document.getElementById('drone-status-text').textContent = "Tracking Active (YOLOv8 + DeepSORT)";
+                    document.getElementById('drone-status-text').className = "text-xs text-emerald-400";
+                    addLog("Drone Alpha-1 arrived. Initiating optical tracking...");
+                }
+                
+                if (elapsed > 10 && elapsed <= 30) {
+                    const newItems = Math.floor(Math.random() * 5) + 1;
+                    const massAdded = newItems * (Math.random() * 0.05 + 0.1); 
+                    totalMass += massAdded;
+                    const currentFlux = (totalMass / (elapsed / 3600)).toFixed(2);
+                    
+                    addLog(`[AI Vision] Active Trackers: ${Math.floor(totalMass * 12)} | Mass Flux: ${currentFlux} kg/hr`);
+                }
+
+                if (elapsed > 30) {
+                    clearInterval(interval);
+                    addLog("Mission Complete. Returning to launch.");
+                    document.getElementById('drone-status-text').textContent = "Returning to Base";
+                    document.getElementById('drone-status-text').className = "text-xs text-yellow-500";
+                    btnRun.disabled = false;
+                    btnRun.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
